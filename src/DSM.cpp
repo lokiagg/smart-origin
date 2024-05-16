@@ -16,6 +16,7 @@ thread_local LocalAllocator DSM::local_allocators[MEMORY_NODE_NUM][NR_DIRECTORY]
 thread_local RdmaBuffer DSM::rbuf[MAX_CORO_NUM];
 thread_local uint64_t DSM::thread_tag = 0;
 
+
 DSM *DSM::getInstance(const DSMConfig &conf) {
   static DSM *dsm = nullptr;
   static WRLock lock;
@@ -142,7 +143,6 @@ void DSM::read(char *buffer, GlobalAddress gaddr, size_t size, bool signal,
              ctx->coro_id);
     (*ctx->yield)(*ctx->master);
   }
-//    printf("read size : %" PRIu64 " \n",size);
 }
 
 void DSM::read_sync(char *buffer, GlobalAddress gaddr, size_t size,
@@ -169,7 +169,6 @@ void DSM::write(const char *buffer, GlobalAddress gaddr, size_t size,
               ctx->coro_id);
     (*ctx->yield)(*ctx->master);
   }
-//  printf("write size : %" PRIu64 " \n",size);
 }
 
 void DSM::write_sync(const char *buffer, GlobalAddress gaddr, size_t size,

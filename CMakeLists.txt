@@ -6,7 +6,7 @@ project(SMART)
 
 #Compiler options
 # set(CMAKE_C_FLAGS "-Wall -Wno-deprecated-declarations -Wsign-compare -g")   # -DNDEBUG
-set(CMAKE_C_FLAGS "-Wall -Wno-deprecated-declarations -Wno-unused-variable -Wno-unused-but-set-variable -Wsign-compare -O3 -g")  # -O3
+set(CMAKE_C_FLAGS "-Wall -Wno-deprecated-declarations -Wno-unused-variable -Wno-unused-but-set-variable -Wsign-compare -O3")  # -O3
 set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=c++17")
 
 #Link Options
@@ -36,7 +36,7 @@ endif()
 if(ENABLE_CACHE)
     add_definitions(-DTREE_ENABLE_CACHE)
 else()
-    add_definitions(-DTREE_ENABLE_CACHE)
+    remove_definitions(-DTREE_ENABLE_CACHE)
 endif()
 
 if(LONG_TEST_EPOCH)

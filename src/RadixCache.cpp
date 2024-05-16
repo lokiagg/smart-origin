@@ -5,7 +5,6 @@
 #include <vector>
 #include <set>
 #include <queue>
-#include <chrono>
 
 
 RadixCache::RadixCache(int cache_size, DSM *dsm) : cache_size(cache_size), dsm(dsm) {
@@ -14,15 +13,9 @@ RadixCache::RadixCache(int cache_size, DSM *dsm) : cache_size(cache_size), dsm(d
   node_queue = new tbb::concurrent_queue<CacheNode*>();
   node_queue->push(cache_root);
 }
-void RadixCache::clear() {
-  free_manager = new FreeMemManager(define::MB * cache_size);
-  cache_root = new CacheNode();
-  node_queue = new tbb::concurrent_queue<CacheNode*>();
-  node_queue->push(cache_root);
-}
+
 
 void RadixCache::add_to_cache(const Key& k, const InternalPage* p_node, const GlobalAddress &node_addr) {
-
   auto depth = p_node->hdr.depth - 1;
   if (depth == 0) return;
 
@@ -37,7 +30,6 @@ void RadixCache::add_to_cache(const Key& k, const InternalPage* p_node, const Gl
   if (free_manager->remain_size() < 0) {
     _evict();
   }
-
   return;
 }
 
@@ -156,7 +148,6 @@ next:
 
 
 bool RadixCache::search_from_cache(const Key& k, volatile CacheEntry**& entry_ptr_ptr, CacheEntry*& entry_ptr, int& entry_idx) {
-
   CacheKey byte_array(k.begin(), k.begin() + define::keyLen - 1);
 
   SearchRetStk ret;
@@ -180,7 +171,6 @@ bool RadixCache::search_from_cache(const Key& k, volatile CacheEntry**& entry_pt
       ret.pop();
     }
   }
-
   return false;
 }
 
@@ -246,12 +236,10 @@ void RadixCache::search_range_from_cache(const Key &from, const Key &to, std::ve
 }
 
 void RadixCache::invalidate(volatile CacheEntry** entry_ptr_ptr, CacheEntry* entry_ptr) {
-      
   if (entry_ptr_ptr && entry_ptr && __sync_bool_compare_and_swap(entry_ptr_ptr, entry_ptr, 0UL)) {
     free_manager->free(entry_ptr->content_size());
     _safely_delete(entry_ptr);
   }
-
 }
 
 void RadixCache::_evict() {

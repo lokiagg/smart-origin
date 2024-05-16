@@ -12,8 +12,7 @@
 #include <fstream>
 #include <random>
 
-
-#define TEST_EPOCH 1000
+#define TEST_EPOCH 10
 // #define NO_WRITE_CONFLICT
 // #define TEST_INSERT
 
@@ -32,8 +31,6 @@ extern uint64_t read_node_repair[MAX_APP_THREAD];
 extern uint64_t try_read_node[MAX_APP_THREAD];
 extern uint64_t read_node_type[MAX_APP_THREAD][MAX_NODE_TYPE_NUM];
 extern uint64_t retry_cnt[MAX_APP_THREAD][MAX_FLAG_NUM];
-extern uint64_t MN_iops[MAX_APP_THREAD][MEMORY_NODE_NUM];
-extern uint64_t MN_datas[MAX_APP_THREAD][MEMORY_NODE_NUM];
 
 int kReadRatio;
 int kThreadCount;
@@ -41,7 +38,7 @@ int kNodeCount;
 
 
 uint64_t kKeySpace = 60 * define::MB;
-double kWarmRatio = 1;
+double kWarmRatio = 0.2;
 double zipfan = 0.99;
 int kCoroCnt = 2;
 #ifdef TEST_INSERT
@@ -78,11 +75,11 @@ public:
     insert_start_key = kWarmRatio * kKeySpace + kThreadCount * kCoroCnt * dsm->getMyNodeID() + id * kCoroCnt + coro_id;
   }
 
-  Request next() override {   //每个节点随机产生符合Zipf分布的键值 进行更新或搜索
-    Request r;   
+  Request next() override {
+    Request r;
     r.is_search = rand_r(&seed) % 100 < kReadRatio;
     r.is_insert = !r.is_search;
-/*
+
 #ifdef TEST_INSERT
     if (r.is_insert) {
       r.k = int2key(insert_start_key);
@@ -92,8 +89,8 @@ public:
       int k = rand_r(&seed) % insert_start_key;
       if (!k) k = 1;
       r.k = int2key(k);
-    }*/
-//#else
+    }
+#else
     uint64_t dis = mehcached_zipf_next(&state);
 #ifdef NO_WRITE_CONFLICT
     if (r.is_insert) {
@@ -109,7 +106,7 @@ public:
 #else
     r.k = to_key(dis);
 #endif
-//#endif
+#endif
     r.v = ++ val;
 
     tp[id][coro_id]++;
@@ -291,20 +288,10 @@ int main(int argc, char *argv[]) {
   timespec s, e;
   uint64_t pre_tp = 0;
   int count = 0;
-    uint64_t MN_tp[MEMORY_NODE_NUM];
-  uint64_t MN_data[MEMORY_NODE_NUM];
-  memset(MN_tp, 0, sizeof(uint64_t) * MEMORY_NODE_NUM);
-  memset(MN_data, 0, sizeof(uint64_t) * MEMORY_NODE_NUM);
-
 
   clock_gettime(CLOCK_REALTIME, &s);
   while(!need_stop) {
-    #ifdef TREE_ENABLE_CACHE
-printf("Cache \n");
-#else 
-printf("No cache\n");
-#endif
-    usleep(10000);
+    sleep(0.5);
     clock_gettime(CLOCK_REALTIME, &e);
     int microseconds = (e.tv_sec - s.tv_sec) * 1000000 +
                        (double)(e.tv_nsec - s.tv_nsec) / 1000;
@@ -370,27 +357,10 @@ printf("No cache\n");
         all_retry_cnt[i] += retry_cnt[j][i];
       }
     }
-        uint64_t MN_tps[MEMORY_NODE_NUM];
-    uint64_t MN_d[MEMORY_NODE_NUM];
-    memset(MN_tps, 0, sizeof(uint64_t) * MEMORY_NODE_NUM);
-    memset(MN_d, 0, sizeof(uint64_t) * MEMORY_NODE_NUM);
-    for(int i=0;i<MAX_APP_THREAD;++ i)
-      for(int j=0;j<MEMORY_NODE_NUM;j++)
-      {
-        MN_tps[j]+=MN_iops[i][j];
-        MN_d[j]+=MN_datas[i][j];
-      }
-    uint64_t MN_cap[MEMORY_NODE_NUM];
-    memset(MN_cap, 0, sizeof(uint64_t) * MEMORY_NODE_NUM);  
-    for(int j=0;j<MEMORY_NODE_NUM;j++)
-      {
-        MN_cap[j]=MN_tps[j]-MN_tp[j];
-      }  
-
     tree->clear_debug_info();
 
-//    save_latency(++ count);
-    if (count++ >= TEST_EPOCH) {
+    save_latency(++ count);
+    if (count >= TEST_EPOCH) {
       need_stop = true;
     }
 
@@ -401,33 +371,12 @@ printf("No cache\n");
       }
       printf("\n");
     }
-    
+
     double per_node_tp = cap * 1.0 / microseconds;
-    double per_MN_tp[MEMORY_NODE_NUM];
-    memset(per_MN_tp, 0, sizeof(double) * MEMORY_NODE_NUM);    
-    for(int j=0;j<MEMORY_NODE_NUM;j++)
-      {
-        per_MN_tp[j]=MN_cap[j]*1.0/microseconds;
-      }       
     uint64_t cluster_tp = dsm->sum((uint64_t)(per_node_tp * 1000));
 
-    printf("%d, throughput %.4f ,duration %d cache hit rate: %lf\n", dsm->getMyNodeID(), per_node_tp, microseconds,hit * 1.0 / all);
-    uint64_t MN_cluster_tp[MEMORY_NODE_NUM];
-    memset(MN_cluster_tp,0,sizeof(uint64_t)*MEMORY_NODE_NUM);
-    for(int j=0;j<MEMORY_NODE_NUM;j++)
-    {
-      printf("CN %d MN %d, throughput %.4f \n",dsm->getMyNodeID(), j, (MN_tps[j]-MN_tp[j])*1.0/microseconds);
-      uint64_t MN_cluster_tp=dsm->sum_MN((uint64_t)(per_MN_tp[j] * 1000),j);
-      if(dsm->getMyNodeID()==0) printf("MN %d all throughput %.3f \n",j,MN_cluster_tp/1000.0);
-    }
+    printf("%d, throughput %.4f\n", dsm->getMyNodeID(), per_node_tp);
 
-
-    for(int j=0;j<MEMORY_NODE_NUM;j++)
-      {
-        MN_tp[j]=MN_tps[j];
-        MN_data[j]=MN_d[j];
-      }
-/*
     if (dsm->getMyNodeID() == 0) {
       printf("epoch %d passed!\n", count);
       printf("cluster throughput %.3f\n", cluster_tp / 1000.0);
@@ -444,7 +393,6 @@ printf("No cache\n");
       }
       printf("\n\n");
     }
-    */
   }
   printf("[END]\n");
   for (int i = 0; i < kThreadCount; i++) {

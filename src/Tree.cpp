@@ -11,7 +11,6 @@
 #include <vector>
 #include <atomic>
 #include <mutex>
-#include <fstream>
 
 
 double cache_miss[MAX_APP_THREAD];
@@ -31,57 +30,6 @@ uint64_t read_node_type[MAX_APP_THREAD][MAX_NODE_TYPE_NUM];
 uint64_t latency[MAX_APP_THREAD][MAX_CORO_NUM][LATENCY_WINDOWS];
 volatile bool need_stop = false;
 uint64_t retry_cnt[MAX_APP_THREAD][MAX_FLAG_NUM];
-uint64_t MN_iops[MAX_APP_THREAD][MEMORY_NODE_NUM];
-uint64_t MN_datas[MAX_APP_THREAD][MEMORY_NODE_NUM];
-
-int update_retry_flag[MAX_APP_THREAD];
-uint64_t retry_time[MAX_APP_THREAD];
-uint64_t insert_time[MAX_APP_THREAD];
-uint64_t cache_update_time_total[MAX_APP_THREAD];
-uint64_t cache_update_cnt_total[MAX_APP_THREAD];
-uint64_t cache_invalid_cnt[MAX_APP_THREAD];
-uint64_t cache_invalid_cnt_total[MAX_APP_THREAD];
-uint64_t cache_invalid_time[MAX_APP_THREAD];
-uint64_t cache_invalid_time_total[MAX_APP_THREAD];
-uint64_t cache_update_time[MAX_APP_THREAD];
-uint64_t cache_update_cnt[MAX_APP_THREAD];
-uint64_t cache_search_time_total[MAX_APP_THREAD];
-uint64_t cache_search_time[MAX_APP_THREAD];
-
-uint64_t read_internal_node_time[MAX_APP_THREAD];
-uint64_t in_pl_update_time[MAX_APP_THREAD];
-uint64_t leaf_merge_time[MAX_APP_THREAD];
-uint64_t node_split_time[MAX_APP_THREAD];
-uint64_t node_extend_time[MAX_APP_THREAD];
-uint64_t insert_empty_slot[MAX_APP_THREAD];
-uint64_t insert_empty_slot_total[MAX_APP_THREAD];
-uint64_t read_internal_node_time_total[MAX_APP_THREAD];
-uint64_t in_pl_update_time_total[MAX_APP_THREAD];
-uint64_t leaf_merge_time_total[MAX_APP_THREAD];
-uint64_t node_split_time_total[MAX_APP_THREAD];
-uint64_t node_extend_time_total[MAX_APP_THREAD];
-int insert_type[MAX_APP_THREAD];
-
-uint64_t insert_empty_slot_cas[MAX_APP_THREAD];
-uint64_t insert_empty_slot_write[MAX_APP_THREAD];
-uint64_t insert_empty_slot_other[MAX_APP_THREAD];
-uint64_t leaf_merge_write[MAX_APP_THREAD];
-uint64_t leaf_merge_cas_old[MAX_APP_THREAD];
-uint64_t leaf_merge_cas_rev[MAX_APP_THREAD];
-uint64_t leaf_merge_cache_update[MAX_APP_THREAD];
-uint64_t leaf_merge_other[MAX_APP_THREAD];
-
-
-uint64_t insert_empty_slot_cas_total[MAX_APP_THREAD];
-uint64_t insert_empty_slot_write_total[MAX_APP_THREAD];
-uint64_t insert_empty_slot_other_total[MAX_APP_THREAD];
-uint64_t leaf_merge_write_total[MAX_APP_THREAD];
-uint64_t leaf_merge_cas_old_total[MAX_APP_THREAD];
-uint64_t leaf_merge_cas_rev_total[MAX_APP_THREAD];
-uint64_t leaf_merge_cache_update_total[MAX_APP_THREAD];
-uint64_t leaf_merge_other_total[MAX_APP_THREAD];
-
-uint64_t insert_type_cnt[MAX_APP_THREAD][6];
 
 thread_local CoroCall Tree::worker[MAX_CORO_NUM];
 thread_local CoroCall Tree::master;
@@ -118,11 +66,6 @@ retry:
   }
 }
 
-void Tree::clear_cache() {
-  index_cache->clear();
-}
-
-
 
 GlobalAddress Tree::get_root_ptr_ptr() {
   GlobalAddress addr;
@@ -141,32 +84,6 @@ InternalEntry Tree::get_root_ptr(CoroContext *cxt, int coro_id) {
 
 void Tree::insert(const Key &k, Value v, CoroContext *cxt, int coro_id, bool is_update, bool is_load) {
   assert(dsm->is_register());
-  update_retry_flag[dsm->getMyThreadID()]=0;
-  cache_update_time[dsm->getMyThreadID()]=0;
-  cache_update_cnt[dsm->getMyThreadID()]=0;
-  cache_search_time[dsm->getMyThreadID()]=0;
-  cache_invalid_cnt[dsm->getMyThreadID()] =0;
-  cache_invalid_time[dsm->getMyThreadID()] =0;
-  read_internal_node_time[dsm->getMyThreadID()]=0;
-  in_pl_update_time[dsm->getMyThreadID()]=0;
-  leaf_merge_time[dsm->getMyThreadID()]=0;
-  node_split_time[dsm->getMyThreadID()]=0;
-  node_extend_time[dsm->getMyThreadID()]=0;
-  insert_type[dsm->getMyThreadID()] =0;
-  insert_empty_slot[dsm->getMyNodeID()]=0;
-
-  insert_empty_slot_cas[dsm->getMyThreadID()]=0;
-  insert_empty_slot_write[dsm->getMyThreadID()]=0;
-    insert_empty_slot_other[dsm->getMyThreadID()]=0;
-  leaf_merge_write[dsm->getMyThreadID()]=0;
-  leaf_merge_cas_old[dsm->getMyThreadID()]=0;
-  leaf_merge_cas_rev[dsm->getMyThreadID()]=0;
-  leaf_merge_cache_update[dsm->getMyThreadID()]=0;
-    leaf_merge_other[dsm->getMyThreadID()]=0;
-    insert_type_cnt[dsm->getMyThreadID()][0]++;
-
-  
-  auto start = std::chrono::high_resolution_clock::now();
 
   // handover
   bool write_handover = false;
@@ -195,19 +112,6 @@ void Tree::insert(const Key &k, Value v, CoroContext *cxt, int coro_id, bool is_
   int max_num;
   uint64_t* cas_buffer;
   int debug_cnt = 0;
-  auto search_cache_start = std::chrono::high_resolution_clock::now();
-
-  auto search_cache_stop = std::chrono::high_resolution_clock::now();
-  auto search_cache_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(search_cache_stop - search_cache_start);
-
-  auto update_cache_read_start = std::chrono::high_resolution_clock::now();
-
-  auto update_cache_read_stop = std::chrono::high_resolution_clock::now();
-  auto update_cache_read_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(search_cache_stop - search_cache_start);
-
-
-  
-
 
 #ifdef TREE_ENABLE_WRITE_COMBINING
   lock_res = local_lock_table->acquire_local_write_lock(k, v, &busy_waiting_queue, cxt, coro_id);
@@ -221,11 +125,7 @@ void Tree::insert(const Key &k, Value v, CoroContext *cxt, int coro_id, bool is_
 
   // search local cache
 #ifdef TREE_ENABLE_CACHE
-  search_cache_start = std::chrono::high_resolution_clock::now();
   from_cache = index_cache->search_from_cache(k, entry_ptr_ptr, entry_ptr, entry_idx);
-  search_cache_stop = std::chrono::high_resolution_clock::now();
-  search_cache_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(search_cache_stop - search_cache_start);
-  cache_search_time[dsm->getMyThreadID()]+=search_cache_duration.count();
   if (from_cache) { // cache hit
     assert(entry_idx >= 0);
     p_ptr = GADD(entry_ptr->addr, sizeof(InternalEntry) * entry_idx);
@@ -258,57 +158,34 @@ next:
 
   // 1. If we are at a NULL node, inject a leaf
   if (p == InternalEntry::Null()) {
-    insert_empty_slot[dsm->getMyThreadID()] =0;
-    auto insert_empty_slot_start = std::chrono::high_resolution_clock::now();
     assert(from_cache == false);
     auto cas_buffer = (dsm->get_rbuf(coro_id)).get_cas_buffer();
-    auto insert_empty_slot_other_stop = std::chrono::high_resolution_clock::now();
-    auto insert_empty_slot_other_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(insert_empty_slot_other_stop - insert_empty_slot_start);
-    
     bool res = out_of_place_write_leaf(k, v, depth, leaf_addr, get_partial(k, depth-1), p_ptr, p, node_ptr, cas_buffer, cxt, coro_id);
-
     // cas fail, retry
     if (!res) {
-      update_retry_flag[dsm->getMyThreadID()]=1;
       p = *(InternalEntry*) cas_buffer;
       retry_flag = CAS_NULL;
       goto next;
     }
-    auto insert_empty_slot_stop = std::chrono::high_resolution_clock::now();
-    auto insert_empty_slot_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(insert_empty_slot_stop - insert_empty_slot_start);
-    insert_empty_slot[dsm->getMyThreadID()] +=insert_empty_slot_duration.count();
-    insert_empty_slot_other[dsm->getMyThreadID()] += insert_empty_slot_other_duration.count();
-    insert_type[dsm->getMyThreadID()]=1;
-    insert_type_cnt[dsm->getMyThreadID()][1] ++;
     goto insert_finish;
   }
 
   // 2. If we are at a leaf, we need to update it / replace it with a node
   if (p.is_leaf) {
     // 2.1 read the leaf
-    auto leaf_start = std::chrono::high_resolution_clock::now();
     auto leaf_buffer = (dsm->get_rbuf(coro_id)).get_leaf_buffer();
     is_valid = read_leaf(p.addr(), leaf_buffer, std::max((unsigned long)p.kv_len, sizeof(Leaf)), p_ptr, from_cache, cxt, coro_id);
 
     if (!is_valid) {
-      update_retry_flag[dsm->getMyThreadID()]=1;
 #ifdef TREE_ENABLE_CACHE
       // invalidate the old leaf entry cache
       if (from_cache) {
-        cache_invalid_cnt[dsm->getMyThreadID()] ++;
-  auto inv_cache_start = std::chrono::high_resolution_clock::now();
         index_cache->invalidate(entry_ptr_ptr, entry_ptr);
-          auto inv_cache_stop = std::chrono::high_resolution_clock::now();
-
-  auto inv_cache_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(inv_cache_stop - inv_cache_start);
-  cache_invalid_time[dsm->getMyThreadID()] += inv_cache_duration.count();
       }
 #endif
       // re-read leaf entry
       auto entry_buffer = (dsm->get_rbuf(coro_id)).get_entry_buffer();
       dsm->read_sync((char *)entry_buffer, p_ptr, sizeof(InternalEntry), cxt);
-      MN_iops[dsm->getMyThreadID()][p_ptr.nodeID]++;
-      MN_datas[dsm->getMyThreadID()][p_ptr.nodeID]+=sizeof(InternalEntry);
       p = *(InternalEntry *)entry_buffer;
       from_cache = false;
       retry_flag = INVALID_LEAF;
@@ -339,13 +216,7 @@ next:
 #ifdef TREE_ENABLE_CACHE
       // invalidate the old leaf entry cache
       if (from_cache) {
-                cache_invalid_cnt[dsm->getMyThreadID()] ++;
-  auto inv_cache_start = std::chrono::high_resolution_clock::now();
         index_cache->invalidate(entry_ptr_ptr, entry_ptr);
-          auto inv_cache_stop = std::chrono::high_resolution_clock::now();
-
-  auto inv_cache_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(inv_cache_stop - inv_cache_start);
-  cache_invalid_time[dsm->getMyThreadID()] += inv_cache_duration.count();
       }
 #endif
       if (!res) {
@@ -362,12 +233,7 @@ next:
         retry_flag = CAS_LEAF;
         goto next;
       }
-#endif 
-      auto leaf_stop = std::chrono::high_resolution_clock::now();
-      auto leaf_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(leaf_stop - leaf_start);
-      in_pl_update_time[dsm->getMyThreadID()] += leaf_duration.count();
-      insert_type[dsm->getMyThreadID()] =2;
-      insert_type_cnt[dsm->getMyThreadID()][2] ++;
+#endif
       goto insert_finish;
     }
 
@@ -375,57 +241,32 @@ next:
     int partial_len = longest_common_prefix(_k, k, depth);
     uint8_t diff_partial = get_partial(_k, depth + partial_len);
     auto cas_buffer = (dsm->get_rbuf(coro_id)).get_cas_buffer();
-    auto leaf_merge_other_stop = std::chrono::high_resolution_clock::now();
-    auto leaf_merge_other_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(leaf_merge_other_stop - leaf_start);
-
     bool res = out_of_place_write_node(k, v, depth, leaf_addr, partial_len, diff_partial, p_ptr, p, node_ptr, cas_buffer, cxt, coro_id);
     // cas fail, retry
     if (!res) {
-      update_retry_flag[dsm->getMyThreadID()]=1;
       p = *(InternalEntry*) cas_buffer;
       retry_flag = CAS_LEAF;
       goto next;
     }
-     auto leaf_stop = std::chrono::high_resolution_clock::now();
-     auto leaf_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(leaf_stop - leaf_start);
-     leaf_merge_time[dsm->getMyThreadID()] += leaf_duration.count();
-     leaf_merge_other[dsm->getMyThreadID()] += leaf_merge_other_duration.count();
-     insert_type[dsm->getMyThreadID()] =3;
-     insert_type_cnt[dsm->getMyThreadID()][3] ++;
     goto insert_finish;
   }
 
   // 3. Find out a node
   // 3.1 read the node
   page_buffer = (dsm->get_rbuf(coro_id)).get_page_buffer();
-  update_cache_read_start = std::chrono::high_resolution_clock::now();
   is_valid = read_node(p, type_correct, page_buffer, p_ptr, depth, from_cache, cxt, coro_id);
-  update_cache_read_stop = std::chrono::high_resolution_clock::now();
-  update_cache_read_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(update_cache_read_stop - update_cache_read_start);
-
-  read_internal_node_time[dsm->getMyThreadID()] +=   update_cache_read_duration.count();
-
   p_node = (InternalPage *)page_buffer;
 
   if (!is_valid) {  // node deleted || outdated cache entry in cached node
-  update_retry_flag[dsm->getMyThreadID()]=1;
 #ifdef TREE_ENABLE_CACHE
     // invalidate the old node cache
     if (from_cache) {
-              cache_invalid_cnt[dsm->getMyThreadID()] ++;
-  auto inv_cache_start = std::chrono::high_resolution_clock::now();
-        index_cache->invalidate(entry_ptr_ptr, entry_ptr);
-          auto inv_cache_stop = std::chrono::high_resolution_clock::now();
-
-  auto inv_cache_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(inv_cache_stop - inv_cache_start);
-  cache_invalid_time[dsm->getMyThreadID()] += inv_cache_duration.count();
+      index_cache->invalidate(entry_ptr_ptr, entry_ptr);
     }
 #endif
     // re-read node entry
     auto entry_buffer = (dsm->get_rbuf(coro_id)).get_entry_buffer();
     dsm->read_sync((char *)entry_buffer, p_ptr, sizeof(InternalEntry), cxt);
-    MN_iops[dsm->getMyThreadID()][p_ptr.nodeID]++;
-    MN_datas[dsm->getMyThreadID()][p_ptr.nodeID]+=sizeof(InternalEntry);
     p = *(InternalEntry *)entry_buffer;
     from_cache = false;
     retry_flag = INVALID_NODE;
@@ -436,22 +277,10 @@ next:
   hdr = p_node->hdr;
 #ifdef TREE_ENABLE_CACHE
   if (from_cache && !type_correct) {  // invalidate the out dated node type
-            cache_invalid_cnt[dsm->getMyThreadID()] ++;
-  auto inv_cache_start = std::chrono::high_resolution_clock::now();
-        index_cache->invalidate(entry_ptr_ptr, entry_ptr);
-          auto inv_cache_stop = std::chrono::high_resolution_clock::now();
-
-  auto inv_cache_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(inv_cache_stop - inv_cache_start);
-  cache_invalid_time[dsm->getMyThreadID()] += inv_cache_duration.count();
+    index_cache->invalidate(entry_ptr_ptr, entry_ptr);
   }
   if (depth == hdr.depth) {
-    cache_update_cnt[dsm->getMyThreadID()] ++;
-      auto add_cache_start = std::chrono::high_resolution_clock::now();
     index_cache->add_to_cache(k, p_node, GADD(p.addr(), sizeof(GlobalAddress) + sizeof(Header)));
-        auto add_cache_stop = std::chrono::high_resolution_clock::now();
-  auto add_cache_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(add_cache_stop - add_cache_start);
-  cache_update_time[dsm->getMyThreadID()] +=add_cache_duration.count();
-//  cache_update_time[dsm->getMyThreadID()] +=update_cache_read_duration.count();
   }
 #else
   UNUSED(type_correct);
@@ -459,14 +288,12 @@ next:
 
   for (int i = 0; i < hdr.partial_len; ++ i) {
     if (get_partial(k, hdr.depth + i) != hdr.partial[i]) {
-       auto node_split_start = std::chrono::high_resolution_clock::now();
       // need split
       auto cas_buffer = (dsm->get_rbuf(coro_id)).get_cas_buffer();
       int partial_len = hdr.depth + i - depth;  // hdr.depth may be outdated, so use partial_len wrt. depth
       bool res = out_of_place_write_node(k, v, depth, leaf_addr, partial_len, hdr.partial[i], p_ptr, p, node_ptr, cas_buffer, cxt, coro_id);
       // cas fail, retry
       if (!res) {
-        update_retry_flag[dsm->getMyThreadID()]=1;
         p = *(InternalEntry*) cas_buffer;
         retry_flag = SPLIT_HEADER;
         goto next;
@@ -474,31 +301,16 @@ next:
 #ifdef TREE_ENABLE_CACHE
       // invalidate cache node due to outdated cache entry in cache node
       if (from_cache) {
-                cache_invalid_cnt[dsm->getMyThreadID()] ++;
-  auto inv_cache_start = std::chrono::high_resolution_clock::now();
         index_cache->invalidate(entry_ptr_ptr, entry_ptr);
-          auto inv_cache_stop = std::chrono::high_resolution_clock::now();
-
-  auto inv_cache_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(inv_cache_stop - inv_cache_start);
-  cache_invalid_time[dsm->getMyThreadID()] += inv_cache_duration.count();
       }
 #endif
       // udpate cas header. Optimization: no need to snyc; mask node_type
       auto header_buffer = (dsm->get_rbuf(coro_id)).get_header_buffer();
       auto new_hdr = Header::split_header(hdr, i);
       dsm->cas_mask(GADD(p.addr(), sizeof(GlobalAddress)), (uint64_t)hdr, (uint64_t)new_hdr, header_buffer, ~Header::node_type_mask, false, cxt);
-      MN_iops[dsm->getMyThreadID()][GADD(p.addr(), sizeof(GlobalAddress)).nodeID]++;
-      MN_datas[dsm->getMyThreadID()][GADD(p.addr(), sizeof(GlobalAddress)).nodeID]+=8;
-
-       auto node_split_stop  = std::chrono::high_resolution_clock::now();
-       auto node_split_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(node_split_stop - node_split_start);
-       node_split_time[dsm->getMyThreadID()] += node_split_duration.count();
-       insert_type[dsm->getMyThreadID()]=4;
-       insert_type_cnt[dsm->getMyThreadID()][4] ++;
       goto insert_finish;
     }
   }
-  
   depth = hdr.depth + hdr.partial_len;
 #ifdef TREE_TEST_ROWEX_ART
   if (!is_update) unlock_node(node_ptr, cxt, coro_id);
@@ -526,28 +338,15 @@ next:
   for (int i = 0; i < max_num; ++ i) {
     auto old_e = p_node->records[i];
     if (old_e == InternalEntry::Null()) {
-          insert_empty_slot[dsm->getMyThreadID()] =0;
-      auto insert_empty_slot_start = std::chrono::high_resolution_clock::now();
       auto e_ptr = GADD(p.addr(), sizeof(GlobalAddress) + sizeof(Header) + i * sizeof(InternalEntry));
       auto cas_buffer = (dsm->get_rbuf(coro_id)).get_cas_buffer();
-      auto insert_empty_slot_other_stop = std::chrono::high_resolution_clock::now();
-      auto insert_empty_slot_other_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(insert_empty_slot_other_stop - insert_empty_slot_start);
-
-
       bool res = out_of_place_write_leaf(k, v, depth + 1, leaf_addr, get_partial(k, depth), e_ptr, old_e, node_ptr, cas_buffer, cxt, coro_id);
-      auto insert_empty_slot_stop = std::chrono::high_resolution_clock::now();
-      auto insert_empty_slot_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(insert_empty_slot_stop - insert_empty_slot_start);
       // cas success, return
       if (res) {
-        insert_empty_slot_other[dsm->getMyThreadID()] += insert_empty_slot_other_duration.count();
-        insert_empty_slot[dsm->getMyThreadID()] += insert_empty_slot_duration.count();
-        insert_type[dsm->getMyThreadID()] =1;
-        insert_type_cnt[dsm->getMyThreadID()][1] ++;
         goto insert_finish;
       }
       // cas fail, check
       else {
-        update_retry_flag[dsm->getMyThreadID()]=1;
         auto e = *(InternalEntry*) cas_buffer;
         if (e.partial == get_partial(k, depth)) {  // same partial keys insert to the same empty slot
           p_ptr = e_ptr;
@@ -566,31 +365,16 @@ next:
   int slot_id;
   cas_buffer = (dsm->get_rbuf(coro_id)).get_cas_buffer();
   if (insert_behind(k, v, depth + 1, leaf_addr, get_partial(k, depth), p.type(), node_ptr, cas_buffer, slot_id, cxt, coro_id)){  // insert success
-
-    auto node_extend_start = std::chrono::high_resolution_clock::now();
-
     auto next_type = num_to_node_type(slot_id);
     cas_node_type(next_type, p_ptr, p, hdr, cxt, coro_id);
 #ifdef TREE_ENABLE_CACHE
     if (from_cache) {  // cache is outdated since node type is changed
-              cache_invalid_cnt[dsm->getMyThreadID()] ++;
-  auto inv_cache_start = std::chrono::high_resolution_clock::now();
-        index_cache->invalidate(entry_ptr_ptr, entry_ptr);
-          auto inv_cache_stop = std::chrono::high_resolution_clock::now();
-
-  auto inv_cache_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(inv_cache_stop - inv_cache_start);
-  cache_invalid_time[dsm->getMyThreadID()] += inv_cache_duration.count();
+      index_cache->invalidate(entry_ptr_ptr, entry_ptr);
     }
 #endif
-    auto node_extend_stop = std::chrono::high_resolution_clock::now();
-    auto node_extend_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(node_extend_stop - node_extend_start);
-    node_extend_time[dsm->getMyThreadID()] += node_extend_duration.count();
-    insert_type[dsm->getMyThreadID()]= 5;
-    insert_type_cnt[dsm->getMyThreadID()][5] ++;
     goto insert_finish;
   }
   else {  // same partial keys insert to the same empty slot
-    update_retry_flag[dsm->getMyThreadID()]=1;
     p_ptr = GADD(node_ptr, slot_id * sizeof(InternalEntry));
     p = *(InternalEntry*) cas_buffer;
     from_cache = false;
@@ -603,30 +387,6 @@ next:
 #endif
 
 insert_finish:
-
-cache_invalid_time_total[dsm->getMyThreadID()] +=cache_invalid_time[dsm->getMyThreadID()];
-cache_invalid_cnt_total[dsm->getMyThreadID()] +=cache_invalid_cnt[dsm->getMyThreadID()];
-cache_update_time_total[dsm->getMyThreadID()] +=cache_update_time[dsm->getMyThreadID()];
-cache_update_cnt_total[dsm->getMyThreadID()] +=cache_update_cnt[dsm->getMyThreadID()];
-cache_search_time_total[dsm->getMyThreadID()] +=cache_search_time[dsm->getMyThreadID()];
-insert_empty_slot_total[dsm->getMyThreadID()] += insert_empty_slot[dsm->getMyThreadID()];
-read_internal_node_time_total[dsm->getMyThreadID()] += read_internal_node_time[dsm->getMyThreadID()];
-in_pl_update_time_total[dsm->getMyThreadID()] += in_pl_update_time[dsm->getMyThreadID()];
-leaf_merge_time_total[dsm->getMyThreadID()] += leaf_merge_time[dsm->getMyThreadID()];
-node_split_time_total[dsm->getMyThreadID()] += node_split_time[dsm->getMyThreadID()];
-node_extend_time_total[dsm->getMyThreadID()] += node_extend_time[dsm->getMyThreadID()];
-insert_empty_slot_cas_total[dsm->getMyThreadID()] += insert_empty_slot_cas[dsm->getMyThreadID()];
-insert_empty_slot_write_total[dsm->getMyThreadID()] += insert_empty_slot_write[dsm->getMyThreadID()];
-insert_empty_slot_other_total[dsm->getMyThreadID()] += insert_empty_slot_other[dsm->getMyThreadID()];
-leaf_merge_write_total[dsm->getMyThreadID()] += leaf_merge_write[dsm->getMyThreadID()];
-leaf_merge_cas_old_total[dsm->getMyThreadID()] += leaf_merge_cas_old[dsm->getMyThreadID()];
-leaf_merge_cas_rev_total[dsm->getMyThreadID()] += leaf_merge_cas_rev[dsm->getMyThreadID()];
-leaf_merge_cache_update_total[dsm->getMyThreadID()] += leaf_merge_cache_update[dsm->getMyThreadID()];
-leaf_merge_other_total[dsm->getMyThreadID()] += leaf_merge_other[dsm->getMyThreadID()];
-
-
-
-
 #ifdef TREE_TEST_ROWEX_ART
   if (!is_update) unlock_node(node_ptr, cxt, coro_id);
 #endif
@@ -640,39 +400,6 @@ leaf_merge_other_total[dsm->getMyThreadID()] += leaf_merge_other[dsm->getMyThrea
 #ifdef TREE_ENABLE_WRITE_COMBINING
   local_lock_table->release_local_write_lock(k, lock_res);
 #endif
-
-
-auto stop = std::chrono::high_resolution_clock::now();
-
-auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
-
-insert_time[dsm->getMyThreadID()]+=(uint64_t)duration.count();
-if(update_retry_flag[dsm->getMyThreadID()]) retry_time[dsm->getMyThreadID()]+=(uint64_t)duration.count();
-/*
-std::ofstream outFile("/users/Shijia/SMART/updateTime.txt", std::ios::app);
- if (!outFile.is_open()) {
-        std::cerr << "Failed to open file for writing!" << std::endl;
-    }
-        outFile <<update_retry_flag[dsm->getMyThreadID()]<<"\t"<<duration.count()<< std::endl;
-        outFile.close();*/
-
-
-
-/*
-std::ofstream outFile("/users/Shijia/SMART/insert_break_down.txt", std::ios::app);
- if (!outFile.is_open()) {
-        std::cerr << "Failed to open file for writing!" << std::endl;
-    }
-        outFile<<insert_type[dsm->getMyThreadID()]<<"\t" <<"insertime(us) :"<<"\t"<<duration.count()<<"\t"<<"\t"<<"cache search time(ns):"<<cache_search_time[dsm->getMyThreadID()]<<"\t"<<"read internal node  time:"<<read_internal_node_time[dsm->getMyThreadID()]<<"\t"<<"insert empty slot time:"<<insert_empty_slot[dsm->getMyThreadID()]<<"\t"<<"in place update time:"<<in_pl_update_time[dsm->getMyThreadID()]<<"\t"<<"leaf merge time:"<<leaf_merge_time[dsm->getMyThreadID()]<<"\t"<<"node split time:"<<node_split_time[dsm->getMyThreadID()]<<"\t"<<"node extend tiem:"<<node_extend_time[dsm->getMyThreadID()]<<"\t"<<"cache invalid time(ns):"<<cache_invalid_time[dsm->getMyThreadID()]<< "\t"<<"cache update time(ns) :"<<cache_update_time[dsm->getMyThreadID()]<< std::endl;
-        outFile.close();     */   
-/*        
-std::ofstream outFile("/users/Shijia/art4real/empty_slot_and_leaf_merge_break_down.txt", std::ios::app);
- if (!outFile.is_open()) {
-        std::cerr << "Failed to open file for writing!" << std::endl;
-    }
-        outFile<<insert_type[dsm->getMyThreadID()]<<"\t" <<"insert empty slot time(us) :"<<"\t"<<insert_empty_slot[dsm->getMyThreadID()]<<"\t"<<"insert empty slot cas time(ns):"<<insert_empty_slot_cas[dsm->getMyThreadID()]<<"\t"<<"insert empty slot write time:"<<insert_empty_slot_write[dsm->getMyThreadID()]<<"\t"<<"leaf merge time:"<<leaf_merge_write[dsm->getMyThreadID()]<<"\t"<<"leaf merge cas old time:"<<leaf_merge_cas_old[dsm->getMyThreadID()]<<"\t"<<"leaf merge cas rev time:"<<leaf_merge_cas_rev[dsm->getMyThreadID()]<<"\t"<<"leaf merge cache update time:"<<leaf_merge_cache_update[dsm->getMyThreadID()]<< std::endl;
-        outFile.close();     
-*/
   return;
 }
 
@@ -681,26 +408,20 @@ bool Tree::read_leaf(const GlobalAddress &leaf_addr, char *leaf_buffer, int leaf
   try_read_leaf[dsm->getMyThreadID()] ++;
 re_read:
   dsm->read_sync(leaf_buffer, leaf_addr, leaf_size, cxt);
-  MN_iops[dsm->getMyThreadID()][leaf_addr.nodeID]++;
-  MN_datas[dsm->getMyThreadID()][leaf_addr.nodeID]+=leaf_size;
   auto leaf = (Leaf *)leaf_buffer;
   // udpate reverse pointer if needed
   if (!from_cache && leaf->rev_ptr != p_ptr) {
     auto cas_buffer = (dsm->get_rbuf(coro_id)).get_cas_buffer();
     dsm->cas(leaf_addr, leaf->rev_ptr, p_ptr, cas_buffer, false, cxt);
-    MN_iops[dsm->getMyThreadID()][leaf_addr.nodeID]++;
-    MN_datas[dsm->getMyThreadID()][leaf_addr.nodeID]+=8;
     // dsm->cas_sync(leaf_addr, leaf->rev_ptr, p_ptr, cas_buffer, cxt);
   }
   // invalidation
   if (!leaf->is_valid(p_ptr, from_cache)) {
-
     leaf_cache_invalid[dsm->getMyThreadID()] ++;
     return false;
   }
   if (!leaf->is_consistent()) {
     read_leaf_retry[dsm->getMyThreadID()] ++;
-    update_retry_flag[dsm->getMyThreadID()]=1;
     goto re_read;
   }
   return true;
@@ -719,18 +440,12 @@ void Tree::in_place_update_leaf(const Key &k, Value &v, const GlobalAddress &lea
   // lock function
   auto acquire_lock = [=](const GlobalAddress &unique_leaf_addr) {
 #ifdef TREE_ENABLE_EMBEDDING_LOCK
-    bool res=dsm->cas_mask_sync(GADD(unique_leaf_addr, lock_cas_offset), 0UL, ~0UL, cas_buffer, lock_mask, cxt);
-    MN_iops[dsm->getMyThreadID()][GADD(unique_leaf_addr, lock_cas_offset).nodeID]++;
-    MN_datas[dsm->getMyThreadID()][GADD(unique_leaf_addr, lock_cas_offset).nodeID]+=8;
-    return res;
+    return dsm->cas_mask_sync(GADD(unique_leaf_addr, lock_cas_offset), 0UL, ~0UL, cas_buffer, lock_mask, cxt);
 #else
     GlobalAddress lock_addr;
     uint64_t mask;
     get_on_chip_lock_addr(unique_leaf_addr, lock_addr, mask);
-    bool res=dsm->cas_dm_mask_sync(lock_addr, 0UL, ~0UL, cas_buffer, mask, cxt);
-    MN_iops[dsm->getMyThreadID()][lock_addr.nodeID]++;
-    MN_datas[dsm->getMyThreadID()][lock_addr.nodeID]+=8;
-    return res;
+    return dsm->cas_dm_mask_sync(lock_addr, 0UL, ~0UL, cas_buffer, mask, cxt);
 #endif
   };
 
@@ -738,15 +453,11 @@ void Tree::in_place_update_leaf(const Key &k, Value &v, const GlobalAddress &lea
   auto unlock = [=](const GlobalAddress &unique_leaf_addr){
 #ifdef TREE_ENABLE_EMBEDDING_LOCK
     dsm->cas_mask_sync(GADD(unique_leaf_addr, lock_cas_offset), ~0UL, 0UL, cas_buffer, lock_mask, cxt);
-    MN_iops[dsm->getMyThreadID()][GADD(unique_leaf_addr, lock_cas_offset).nodeID]++;
-    MN_datas[dsm->getMyThreadID()][GADD(unique_leaf_addr, lock_cas_offset).nodeID]+=8;
 #else
     GlobalAddress lock_addr;
     uint64_t mask;
     get_on_chip_lock_addr(unique_leaf_addr, lock_addr, mask);
     dsm->cas_dm_mask_sync(lock_addr, ~0UL, 0UL, cas_buffer, mask, cxt);
-    MN_iops[dsm->getMyThreadID()][lock_addr.nodeID]++;
-    MN_datas[dsm->getMyThreadID()][lock_addr.nodeID]+=8;
 #endif
   };
 
@@ -757,15 +468,11 @@ void Tree::in_place_update_leaf(const Key &k, Value &v, const GlobalAddress &lea
   // write w/o unlock
   auto write_without_unlock = [=](const GlobalAddress &unique_leaf_addr){
     dsm->write_sync((const char*)leaf, unique_leaf_addr, sizeof(Leaf), cxt);
-    MN_iops[dsm->getMyThreadID()][unique_leaf_addr.nodeID]++;
-    MN_datas[dsm->getMyThreadID()][unique_leaf_addr.nodeID]+=sizeof(Leaf);
   };
   // write and unlock
   auto write_and_unlock = [=](const GlobalAddress &unique_leaf_addr){
     leaf->unlock();
     dsm->write_sync((const char*)leaf, unique_leaf_addr, sizeof(Leaf), cxt);
-    MN_iops[dsm->getMyThreadID()][unique_leaf_addr.nodeID]++;
-    MN_datas[dsm->getMyThreadID()][unique_leaf_addr.nodeID]+=sizeof(Leaf);
   };
 #endif
 
@@ -783,7 +490,6 @@ re_acquire:
       (*cxt->yield)(*cxt->master);
     }
     lock_fail[dsm->getMyThreadID()] ++;
-    update_retry_flag[dsm->getMyThreadID()]=1;
     goto re_acquire;
   }
 
@@ -798,8 +504,6 @@ write_leaf:
   local_lock_table->release_local_lock(leaf_addr, unlock, write_without_unlock, write_and_unlock);
 #else
   dsm->write_sync((const char*)leaf, leaf_addr, sizeof(Leaf), cxt);
-  MN_iops[dsm->getMyThreadID()][leaf_addr.nodeID]++;
-  MN_datas[dsm->getMyThreadID()][leaf_addr.nodeID]+=sizeof(Leaf);
   local_lock_table->release_local_lock(leaf_addr, unlock);
 #endif
 
@@ -816,8 +520,6 @@ write_leaf:
   // write back the lock at the same time
   leaf->unlock();
   dsm->write_sync((const char*)leaf, leaf_addr, sizeof(Leaf), cxt);
-  MN_iops[dsm->getMyThreadID()][leaf_addr.nodeID]++;
-  MN_datas[dsm->getMyThreadID()][leaf_addr.nodeID]+=sizeof(Leaf);
 #else
   // batch write updated leaf and on-chip lock
   RdmaOpRegion rs[2];
@@ -832,10 +534,6 @@ write_leaf:
   rs[1].dest = lock_addr;
   rs[1].is_on_chip = true;
   dsm->write_cas_mask_sync(rs[0], rs[1], ~0UL, 0UL, mask, cxt);
-  MN_iops[dsm->getMyThreadID()][leaf_addr.nodeID]++;
-  MN_datas[dsm->getMyThreadID()][leaf_addr.nodeID]+=sizeof(Leaf);
-  MN_iops[dsm->getMyThreadID()][lock_addr.nodeID]++;
-  MN_datas[dsm->getMyThreadID()][lock_addr.nodeID]+=8;
 #endif
 #endif
   return;
@@ -942,10 +640,6 @@ bool Tree::out_of_place_write_leaf(const Key &k, Value &v, int depth, GlobalAddr
                                    const GlobalAddress &e_ptr, const InternalEntry &old_e, const GlobalAddress& node_addr, uint64_t *ret_buffer,
                                    CoroContext *cxt, int coro_id) {
   bool unwrite = leaf_addr == GlobalAddress::Null();
-
-
-  auto insert_empty_slot_write_start = std::chrono::high_resolution_clock::now();
-
 #ifdef TREE_ENABLE_WRITE_COMBINING
   if (local_lock_table->get_combining_value(k, v)) unwrite = true;
 #endif
@@ -955,40 +649,21 @@ bool Tree::out_of_place_write_leaf(const Key &k, Value &v, int depth, GlobalAddr
     new (leaf_buffer) Leaf(k, v, e_ptr);
     leaf_addr = dsm->alloc(sizeof(Leaf));
     dsm->write_sync(leaf_buffer, leaf_addr, sizeof(Leaf), cxt);
-    MN_iops[dsm->getMyThreadID()][leaf_addr.nodeID]++;
-    MN_datas[dsm->getMyThreadID()][leaf_addr.nodeID]+=sizeof(Leaf);
   }
   else {  // write the changed e_ptr inside leaf
     auto ptr_buffer = (dsm->get_rbuf(coro_id)).get_entry_buffer();
     *ptr_buffer = e_ptr;
     dsm->write((const char *)ptr_buffer, leaf_addr, sizeof(GlobalAddress), false, cxt);
-    MN_iops[dsm->getMyThreadID()][leaf_addr.nodeID]++;
-    MN_datas[dsm->getMyThreadID()][leaf_addr.nodeID]+=sizeof(GlobalAddress);
   }
-    auto insert_empty_slot_write_stop = std::chrono::high_resolution_clock::now();
-    auto insert_empty_slot_write_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(insert_empty_slot_write_stop - insert_empty_slot_write_start);
-    if(insert_type[dsm->getMyThreadID()==1])  insert_empty_slot_write[dsm->getMyThreadID()] += insert_empty_slot_write_duration.count();
+
   // cas entry
   auto new_e = InternalEntry(partial_key, sizeof(Leaf) < 128 ? sizeof(Leaf) : 0, leaf_addr);
-  auto insert_empty_slot_other_stop = std::chrono::high_resolution_clock::now();
-  auto insert_empty_slot_other_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(insert_empty_slot_other_stop - insert_empty_slot_write_stop);
   auto remote_cas = [=](){
-    auto insert_empty_slot_cas_start = std::chrono::high_resolution_clock::now();
-    bool res=dsm->cas_sync(e_ptr, (uint64_t)old_e, (uint64_t)new_e, ret_buffer, cxt);
-    MN_iops[dsm->getMyThreadID()][e_ptr.nodeID]++;
-    MN_datas[dsm->getMyThreadID()][e_ptr.nodeID]+=8;
-
-    auto insert_empty_slot_cas_stop = std::chrono::high_resolution_clock::now();
-    auto insert_empty_slot_cas_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(insert_empty_slot_cas_stop - insert_empty_slot_cas_start);
-    if(res&&insert_type[dsm->getMyThreadID()==1])  insert_empty_slot_cas[dsm->getMyThreadID()] += insert_empty_slot_cas_duration.count();
-    return res;
-
+    return dsm->cas_sync(e_ptr, (uint64_t)old_e, (uint64_t)new_e, ret_buffer, cxt);
   };
 
 // #ifndef TREE_TEST_ROWEX_ART
-  bool res=remote_cas();
-  if(res) insert_empty_slot_other[dsm->getMyThreadID()] += insert_empty_slot_other_duration.count();
-  return res;
+  return remote_cas();
 // #else
 //   return lock_and_cas_in_node(node_addr, remote_cas, cxt, coro_id);
 // #endif
@@ -999,8 +674,6 @@ bool Tree::read_node(InternalEntry &p, bool& type_correct, char *node_buffer, co
                      CoroContext *cxt, int coro_id) {
   auto read_size = sizeof(GlobalAddress) + sizeof(Header) + node_type_to_num(p.type()) * sizeof(InternalEntry);
   dsm->read_sync(node_buffer, p.addr(), read_size, cxt);
-  MN_iops[dsm->getMyThreadID()][p.addr().nodeID]++;
-  MN_datas[dsm->getMyThreadID()][p.addr().nodeID]+=read_size;
   auto p_node = (InternalPage *)node_buffer;
   auto& hdr = p_node->hdr;
 
@@ -1012,8 +685,6 @@ bool Tree::read_node(InternalEntry &p, bool& type_correct, char *node_buffer, co
       read_node_repair[dsm->getMyThreadID()] ++;
       auto remain_size = (node_type_to_num(hdr.type()) - node_type_to_num(p.type())) * sizeof(InternalEntry);
       dsm->read_sync(node_buffer + read_size, GADD(p.addr(), read_size), remain_size, cxt);
-      MN_iops[dsm->getMyThreadID()][GADD(p.addr(), read_size).nodeID]++;
-     MN_datas[dsm->getMyThreadID()][GADD(p.addr(), read_size).nodeID]+=remain_size;
     }
     p.node_type = hdr.node_type;
     type_correct = false;
@@ -1023,8 +694,6 @@ bool Tree::read_node(InternalEntry &p, bool& type_correct, char *node_buffer, co
   if (!from_cache && p_node->rev_ptr != p_ptr) {
     auto cas_buffer = (dsm->get_rbuf(coro_id)).get_cas_buffer();
     dsm->cas(p.addr(), p_node->rev_ptr, p_ptr, cas_buffer, false, cxt);
-    MN_iops[dsm->getMyThreadID()][p.addr().nodeID]++;
-    MN_datas[dsm->getMyThreadID()][p.addr().nodeID]+=8;
     // dsm->cas_sync(p.addr(), p_node->rev_ptr, p_ptr, cas_buffer, cxt);
   }
   return p_node->is_valid(p_ptr, depth, from_cache);
@@ -1034,8 +703,6 @@ bool Tree::read_node(InternalEntry &p, bool& type_correct, char *node_buffer, co
 bool Tree::out_of_place_write_node(const Key &k, Value &v, int depth, GlobalAddress& leaf_addr, int partial_len, uint8_t diff_partial,
                                    const GlobalAddress &e_ptr, const InternalEntry &old_e, const GlobalAddress& node_addr,
                                    uint64_t *ret_buffer, CoroContext *cxt, int coro_id) {
-
-  auto insert_leaf_merge_write_start = std::chrono::high_resolution_clock::now();                                  
   int new_node_num = partial_len / (define::hPartialLenMax + 1) + 1;
   auto leaf_unwrite = (leaf_addr == GlobalAddress::Null());
 
@@ -1057,8 +724,6 @@ bool Tree::out_of_place_write_node(const Key &k, Value &v, int depth, GlobalAddr
     auto ptr_buffer = (dsm->get_rbuf(coro_id)).get_entry_buffer();
     *ptr_buffer = leaf_e_ptr;
     dsm->write((const char *)ptr_buffer, leaf_addr, sizeof(GlobalAddress), false, cxt);
-    MN_iops[dsm->getMyThreadID()][leaf_addr.nodeID]++;
-    MN_datas[dsm->getMyThreadID()][leaf_addr.nodeID]+=sizeof(GlobalAddress);
   }
 
   // init inner nodes
@@ -1103,29 +768,9 @@ bool Tree::out_of_place_write_node(const Key &k, Value &v, int depth, GlobalAddr
   }
   dsm->write_batches_sync(rs, (leaf_unwrite ? new_node_num + 1 : new_node_num), cxt, coro_id);
 
-  auto insert_leaf_merge_write_stop = std::chrono::high_resolution_clock::now();
-  auto insert_leaf_merge_write_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(insert_leaf_merge_write_stop - insert_leaf_merge_write_start);
-  leaf_merge_write[dsm->getMyThreadID()] += insert_leaf_merge_write_duration.count();
-  for(i=0;i<new_node_num;++ i)
-  {
-    MN_iops[dsm->getMyThreadID()][node_addrs[i].nodeID]++;
-    MN_datas[dsm->getMyThreadID()][node_addrs[i].nodeID]+=page_size;
-  }
-  if(leaf_unwrite) 
-  {
-    MN_iops[dsm->getMyThreadID()][leaf_addr.nodeID]++;
-    MN_datas[dsm->getMyThreadID()][leaf_addr.nodeID]+=sizeof(Leaf);
-  }
   // cas
   auto remote_cas = [=](){
-    auto insert_leaf_merge_cas_old_start = std::chrono::high_resolution_clock::now();
-    bool res=dsm->cas_sync(e_ptr, (uint64_t)old_e, (uint64_t)new_e, ret_buffer, cxt);
-    auto insert_leaf_merge_cas_old_stop = std::chrono::high_resolution_clock::now();
-  auto insert_leaf_merge_cas_old_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(insert_leaf_merge_cas_old_stop - insert_leaf_merge_cas_old_start);
-  if(res)  leaf_merge_cas_old[dsm->getMyThreadID()] += insert_leaf_merge_cas_old_duration.count();
-    MN_iops[dsm->getMyThreadID()][e_ptr.nodeID]++;
-    MN_datas[dsm->getMyThreadID()][e_ptr.nodeID]+=8;
-    return res;
+    return dsm->cas_sync(e_ptr, (uint64_t)old_e, (uint64_t)new_e, ret_buffer, cxt);
   };
   auto reclaim_memory = [=](){
     for (int i = 0; i < new_node_num; ++ i) {
@@ -1141,26 +786,15 @@ bool Tree::out_of_place_write_node(const Key &k, Value &v, int depth, GlobalAddr
 
   // cas the updated rev_ptr inside old leaf / old node
   if (res) {
-    auto insert_leaf_merge_cas_rev_start = std::chrono::high_resolution_clock::now();
     auto cas_buffer = (dsm->get_rbuf(coro_id)).get_cas_buffer();
     dsm->cas(old_e.addr(), e_ptr, GADD(node_addrs[new_node_num - 1], sizeof(GlobalAddress) + sizeof(Header)), cas_buffer, false, cxt);
-        auto insert_leaf_merge_cas_rev_stop = std::chrono::high_resolution_clock::now();
-  auto insert_leaf_merge_cas_rev_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(insert_leaf_merge_cas_rev_stop - insert_leaf_merge_cas_rev_start);
-   leaf_merge_cas_rev[dsm->getMyThreadID()] += insert_leaf_merge_cas_rev_duration.count();
-    MN_iops[dsm->getMyThreadID()][old_e.addr().nodeID]++;
-    MN_datas[dsm->getMyThreadID()][old_e.addr().nodeID]+=8;
   }
 
 
 #ifdef TREE_ENABLE_CACHE
   if (res) {
     for (int i = 0; i < new_node_num; ++ i) {
-        auto add_cache_start = std::chrono::high_resolution_clock::now();
       index_cache->add_to_cache(k, node_pages[i], GADD(node_addrs[i], sizeof(GlobalAddress) + sizeof(Header)));
-       auto add_cache_stop = std::chrono::high_resolution_clock::now();
-      auto add_cache_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(add_cache_stop - add_cache_start);
-      cache_update_time[dsm->getMyThreadID()] +=add_cache_duration.count();
-      leaf_merge_cache_update[dsm->getMyThreadID()] += add_cache_duration.count();
     }
   }
 #endif
@@ -1189,13 +823,8 @@ void Tree::cas_node_type(NodeType next_type, GlobalAddress p_ptr, InternalEntry 
     rs[1].source     = (uint64_t)cas_buffer_2;
     rs[1].dest       = header_addr;
     rs[1].is_on_chip = false;
-    std::pair<bool, bool> res=dsm->two_cas_mask_sync(rs[0], (uint64_t)p, (uint64_t)new_e, ~0UL,
+    return dsm->two_cas_mask_sync(rs[0], (uint64_t)p, (uint64_t)new_e, ~0UL,
                                   rs[1], hdr, Header(next_type), Header::node_type_mask, cxt);
-    MN_iops[dsm->getMyThreadID()][p_ptr.nodeID]++;
-    MN_datas[dsm->getMyThreadID()][p_ptr.nodeID]+=8;
-    MN_iops[dsm->getMyThreadID()][header_addr.nodeID]++;
-    MN_datas[dsm->getMyThreadID()][header_addr.nodeID]+=8;
-    return res;
   };
 
   // only cas old_entry
@@ -1362,8 +991,6 @@ next:
       // re-read leaf entry
       auto entry_buffer = (dsm->get_rbuf(coro_id)).get_entry_buffer();
       dsm->read_sync((char *)entry_buffer, p_ptr, sizeof(InternalEntry), cxt);
-      MN_iops[dsm->getMyThreadID()][p_ptr.nodeID]++;
-      MN_datas[dsm->getMyThreadID()][p_ptr.nodeID]+=sizeof(InternalEntry);
       p = *(InternalEntry *)entry_buffer;
       from_cache = false;
       retry_flag = INVALID_LEAF;
