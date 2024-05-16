@@ -103,7 +103,7 @@ constexpr int kIndexCacheSize = 600;
 
 // KV
 constexpr uint32_t keyLen = 8;
-constexpr uint32_t simulatedValLen = 32;
+constexpr uint32_t simulatedValLen = 8;
 constexpr uint32_t allocAlignLeafSize = ROUND_UP(keyLen + simulatedValLen + 8 + 2, ALLOC_ALLIGN_BIT);
 
 // Tree
