@@ -66,7 +66,7 @@ inline int bits_in(std::uint64_t u) {
 }
 
 #define BOOST_COROUTINES_NO_DEPRECATION_WARNING
-#include <boost/coroutine/all.hpp>
+#include <boost/core/scoped_enum.hpp>
 #include <boost/crc.hpp>
 
 using CoroYield = boost::coroutines::symmetric_coroutine<void>::yield_type;
