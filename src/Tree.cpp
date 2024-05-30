@@ -307,6 +307,7 @@ next:
       // udpate cas header. Optimization: no need to snyc; mask node_type
       auto header_buffer = (dsm->get_rbuf(coro_id)).get_header_buffer();
       auto new_hdr = Header::split_header(hdr, i);
+
       dsm->cas_mask(GADD(p.addr(), sizeof(GlobalAddress)), (uint64_t)hdr, (uint64_t)new_hdr, header_buffer, ~Header::node_type_mask, false, cxt);
       goto insert_finish;
     }
@@ -440,11 +441,29 @@ void Tree::in_place_update_leaf(const Key &k, Value &v, const GlobalAddress &lea
   // lock function
   auto acquire_lock = [=](const GlobalAddress &unique_leaf_addr) {
 #ifdef TREE_ENABLE_EMBEDDING_LOCK
+//增加mask功能 
+/*  char* leaf_buffer;
+  dsm->read_sync(leaf_buffer,leaf_addr,sizeof(leaf),cxt);
+  uint64_t swap=compare=*((uint64_t*)(leaf_buffer + sizeof(leaf) - 8));
+  compare &= ~0xFFULL;
+  swap |= 0xFF; 
+  return dsm->cas_mask_sync(GADD(unique_leaf_addr, lock_cas_offset), compare, swap, cas_buffer, lock_mask, cxt);*/
     return dsm->cas_mask_sync(GADD(unique_leaf_addr, lock_cas_offset), 0UL, ~0UL, cas_buffer, lock_mask, cxt);
 #else
     GlobalAddress lock_addr;
     uint64_t mask;
     get_on_chip_lock_addr(unique_leaf_addr, lock_addr, mask);
+//增加mask功能 
+/*  char* cas_buf;
+  auto lock_index = CityHash64((char *)&leaf_offset, sizeof(leaf_offset)) % define::kOnChipLockNum;
+  dsm->read_sync(cas_buf,lock_addr+lock_index/8,8,cxt);
+  uint64_t swap=compare=*((uint64_t*)cas_buf);
+  compare &= mask;
+  swap |= ~mask;
+  return dsm->cas_dm_mask_sync(lock_addr, compare, swap, cas_buffer, mask, cxt);
+   */
+
+
     return dsm->cas_dm_mask_sync(lock_addr, 0UL, ~0UL, cas_buffer, mask, cxt);
 #endif
   };
@@ -452,11 +471,30 @@ void Tree::in_place_update_leaf(const Key &k, Value &v, const GlobalAddress &lea
   // unlock function
   auto unlock = [=](const GlobalAddress &unique_leaf_addr){
 #ifdef TREE_ENABLE_EMBEDDING_LOCK
+//增加mask功能 
+/*  char* leaf_buffer;
+  dsm->read_sync(leaf_buffer,leaf_addr,sizeof(leaf),cxt);
+  uint64_t swap=compare=*((uint64_t*)(leaf_buffer + sizeof(leaf) - 8));
+  compare |= 0xFF;
+  swap &= ~0xFFULL;
+  return dsm->cas_mask_sync(GADD(unique_leaf_addr, lock_cas_offset), compare, swap, cas_buffer, lock_mask, cxt);*/
+
     dsm->cas_mask_sync(GADD(unique_leaf_addr, lock_cas_offset), ~0UL, 0UL, cas_buffer, lock_mask, cxt);
 #else
     GlobalAddress lock_addr;
     uint64_t mask;
     get_on_chip_lock_addr(unique_leaf_addr, lock_addr, mask);
+
+  //增加mask功能 
+/*  char* cas_buf;
+  auto lock_index = CityHash64((char *)&leaf_offset, sizeof(leaf_offset)) % define::kOnChipLockNum;
+  dsm->read_sync(cas_buf,lock_addr+lock_index/8,8,cxt);
+  uint64_t swap=compare=*((uint64_t*)cas_buf);
+  compare |= ~mask;
+  swap &= mask;
+  return dsm->cas_dm_mask_sync(lock_addr, compare, swap, cas_buffer, mask, cxt);
+   */
+
     dsm->cas_dm_mask_sync(lock_addr, ~0UL, 0UL, cas_buffer, mask, cxt);
 #endif
   };
@@ -530,9 +568,20 @@ write_leaf:
   GlobalAddress lock_addr;
   uint64_t mask;
   get_on_chip_lock_addr(leaf_addr, lock_addr, mask);
+
   rs[1].source = (uint64_t)cas_buffer;  // unlock
   rs[1].dest = lock_addr;
   rs[1].is_on_chip = true;
+
+//增加mask功能 
+/*  char* cas_buf;
+  dsm->read_sync(cas_buf,lock_addr+lock_index/8,8,cxt);
+  uint64_t swap=compare=*((uint64_t*)cas_buf);
+  compare |= mask;
+  swap &= ~mask;
+  dsm->write_cas_mask_sync(rs[0], rs[1], compare, swap, mask, cxt);
+   */
+
   dsm->write_cas_mask_sync(rs[0], rs[1], ~0UL, 0UL, mask, cxt);
 #endif
 #endif
@@ -579,7 +628,7 @@ void Tree::get_on_chip_lock_addr(const GlobalAddress &leaf_addr, GlobalAddress &
   auto lock_index = CityHash64((char *)&leaf_offset, sizeof(leaf_offset)) % define::kOnChipLockNum;
   lock_addr.nodeID = leaf_addr.nodeID;
   lock_addr.offset = lock_index / 64 * sizeof(uint64_t);
-  mask = 1UL << (lock_index % 64);
+  mask = 1UL << (lock_index % 64);//在8B中的相对位置
 }
 
 #ifdef TREE_TEST_ROWEX_ART
@@ -592,6 +641,15 @@ void Tree::lock_node(const GlobalAddress &node_addr, CoroContext *cxt, int coro_
     GlobalAddress lock_addr;
     uint64_t mask;
     get_on_chip_lock_addr(unique_node_addr, lock_addr, mask);
+//增加mask功能 
+/*  char* cas_buf;
+  auto lock_index = CityHash64((char *)&leaf_offset, sizeof(leaf_offset)) % define::kOnChipLockNum;
+  dsm->read_sync(cas_buf,lock_addr+lock_index/8,8,cxt);
+  uint64_t swap=compare=*((uint64_t*)cas_buf);
+  compare &= mask;
+  swap |= ~mask;
+  return dsm->cas_dm_mask_sync(lock_addr, compare, swap, cas_buffer, mask, cxt);
+   */
     return dsm->cas_dm_mask_sync(lock_addr, 0UL, ~0UL, cas_buffer, mask, cxt);
   };
 
@@ -624,6 +682,16 @@ void Tree::unlock_node(const GlobalAddress &node_addr, CoroContext *cxt, int cor
     GlobalAddress lock_addr;
     uint64_t mask;
     get_on_chip_lock_addr(unique_node_addr, lock_addr, mask);
+
+    //增加mask功能 
+/*  char* cas_buf;
+  auto lock_index = CityHash64((char *)&leaf_offset, sizeof(leaf_offset)) % define::kOnChipLockNum;
+  dsm->read_sync(cas_buf,lock_addr+lock_index/8,8,cxt);
+  uint64_t swap=compare=*((uint64_t*)cas_buf);
+  compare |= mask;
+  swap &= ~mask;
+  return dsm->cas_dm_mask_sync(lock_addr, compare, swap, cas_buffer, mask, cxt);
+   */
     dsm->cas_dm_mask_sync(lock_addr, ~0UL, 0UL, cas_buffer, mask, cxt);
   };
 

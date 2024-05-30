@@ -35,7 +35,7 @@ void rdmaQueryQueuePair(ibv_qp *qp) {
 }
 
 void checkDMSupported(struct ibv_context *ctx) {
-  struct ibv_exp_device_attr attrs;
+/*修改 struct ibv_exp_device_attr attrs;
 
   attrs.comp_mask = IBV_EXP_DEVICE_ATTR_UMR;
   attrs.comp_mask |= IBV_EXP_DEVICE_ATTR_MAX_DM_SIZE;
@@ -51,5 +51,20 @@ void checkDMSupported(struct ibv_context *ctx) {
   } else {
     kMaxDeviceMemorySize = attrs.max_dm_size;
     printf("NIC Device Memory is %dKB\n", kMaxDeviceMemorySize / 1024);
-  }
+  }*/ 
+    struct ibv_device_attr attrs;
+
+    if (ibv_query_device(ctx, &attrs)) {
+        printf("Couldn't query device attributes\n");
+    }
+
+    if (!(attrs.device_cap_flags & IBV_DEVICE_MEM_WINDOW)) {
+        fprintf(stderr, "Device does not support Device Memory!\n");
+        exit(-1);
+    } else if (attrs.max_mr_size == 0) {
+        fprintf(stderr, "Device Memory size is not available!\n");
+    } else {
+        kMaxDeviceMemorySize = attrs.max_mr_size;
+        printf("NIC Device Memory is %lu bytes\n", kMaxDeviceMemorySize);
+    }
 }
