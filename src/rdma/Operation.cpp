@@ -329,27 +329,26 @@ bool rdmaCompareAndSwap(ibv_qp *qp, uint64_t source, uint64_t dest,
   }
   return true;
 }
-
+/*
 bool rdmaCompareAndSwapMask(ibv_qp *qp, uint64_t source, uint64_t dest,
                             uint64_t compare, uint64_t swap, uint32_t lkey,
                             uint32_t remoteRKey, uint64_t mask, bool singal, uint64_t wrID) {
-  struct ibv_sge sg;
-/*  struct ibv_exp_send_wr wr;
-修改  struct ibv_exp_send_wr *wrBad;
-*/
+  struct ibv_exp_send_wr wr;
+  struct ibv_exp_send_wr *wrBad;
+
   struct ibv_send_wr wr;
   struct ibv_send_wr *wrBad;
   fillSgeWr(sg, wr, source, 8, lkey);
 
-//修改？  wr.exp_opcode = IBV_EXP_WR_EXT_MASKED_ATOMIC_CMP_AND_SWP;
-  wr.opcode=IBV_WR_ATOMIC_CMP_AND_SWP;
-//修改  wr.exp_send_flags = IBV_EXP_SEND_EXT_ATOMIC_INLINE;
-  wr.send_flags = IBV_SEND_INLINE;
+  wr.exp_opcode = IBV_EXP_WR_EXT_MASKED_ATOMIC_CMP_AND_SWP;
+
+  wr.exp_send_flags = IBV_EXP_SEND_EXT_ATOMIC_INLINE;
+
   if (singal) {
-//修改    wr.exp_send_flags |= IBV_EXP_SEND_SIGNALED;
-    wr.send_flags |= IBV_SEND_SIGNALED;
+    wr.exp_send_flags |= IBV_EXP_SEND_SIGNALED;
+
   }
-/*修改？
+
   wr.ext_op.masked_atomics.log_arg_sz = 3;
   wr.ext_op.masked_atomics.remote_addr = dest;
   wr.ext_op.masked_atomics.rkey = remoteRKey;
@@ -361,21 +360,46 @@ bool rdmaCompareAndSwapMask(ibv_qp *qp, uint64_t source, uint64_t dest,
 
   op.compare_mask = mask;
   op.swap_mask = mask;
-*/
 
-wr.wr.atomic.remote_addr = dest;
-wr.wr.atomic.compare_add = compare;
-wr.wr.atomic.swap = swap;
-wr.wr.atomic.rkey = remoteRKey;
-wr.wr_id = wrID;
-//修改  if (ibv_exp_post_send(qp, &wr, &wrBad)) {
+  if (ibv_exp_post_send(qp, &wr, &wrBad)) {
+
+    Debug::notifyError("Send with MASK ATOMIC_CMP_AND_SWP failed.");
+    return false;
+  }
+  return true;
+}
+*/
+bool rdmaCompareAndSwapMask(ibv_qp *qp, uint64_t source, uint64_t dest,
+                            uint64_t compare, uint64_t swap, uint32_t lkey,
+                            uint32_t remoteRKey, uint64_t mask, bool singal, uint64_t wrID) {
+  struct ibv_sge sg;
+
+  struct ibv_send_wr wr;
+  struct ibv_send_wr *wrBad;
+  fillSgeWr(sg, wr, source, 8, lkey);
+
+
+  wr.opcode=IBV_WR_ATOMIC_CMP_AND_SWP;
+
+  wr.send_flags = IBV_SEND_INLINE;
+  if (singal) {
+    wr.send_flags |= IBV_SEND_SIGNALED;
+  }
+
+
+  wr.wr.atomic.remote_addr = dest;
+  wr.wr.atomic.compare_add = compare;
+  wr.wr.atomic.swap = swap;
+  wr.wr.atomic.rkey = remoteRKey;
+  wr.wr_id = wrID;
+  
+
   if (ibv_post_send(qp, &wr, &wrBad)) {
     Debug::notifyError("Send with MASK ATOMIC_CMP_AND_SWP failed.");
     return false;
   }
   return true;
 }
-
 
 bool rdmaReadBatch(ibv_qp *qp, RdmaOpRegion *ror, int k, bool isSignaled,
                    uint64_t wrID) {

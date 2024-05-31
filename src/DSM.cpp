@@ -598,7 +598,6 @@ bool DSM::cas_sync(GlobalAddress gaddr, uint64_t equal, uint64_t val,
 
   return equal == *rdma_buffer;
 }
-
 void DSM::cas_mask(GlobalAddress gaddr, uint64_t equal, uint64_t val,
                    uint64_t *rdma_buffer, uint64_t mask, bool signal, CoroContext *ctx) {
   if (ctx == nullptr) {
@@ -615,6 +614,7 @@ void DSM::cas_mask(GlobalAddress gaddr, uint64_t equal, uint64_t val,
     (*ctx->yield)(*ctx->master);
   }
 }
+
 
 bool DSM::cas_mask_sync(GlobalAddress gaddr, uint64_t equal, uint64_t val,
                         uint64_t *rdma_buffer, uint64_t mask, CoroContext *ctx) {

@@ -442,13 +442,14 @@ void Tree::in_place_update_leaf(const Key &k, Value &v, const GlobalAddress &lea
   auto acquire_lock = [=](const GlobalAddress &unique_leaf_addr) {
 #ifdef TREE_ENABLE_EMBEDDING_LOCK
 //增加mask功能 
-/*  char* leaf_buffer;
-  dsm->read_sync(leaf_buffer,leaf_addr,sizeof(leaf),cxt);
-  uint64_t swap=compare=*((uint64_t*)(leaf_buffer + sizeof(leaf) - 8));
-  compare &= ~0xFFULL;
+  char* buffer;
+  buffer=malloc(8);
+  dsm->read_sync(buffer,GADD(unique_leaf_addr, lock_cas_offset),8,cxt);
+  uint64_t swap=compare=*(buffer);
+  compare &= ~0xFF;
   swap |= 0xFF; 
-  return dsm->cas_mask_sync(GADD(unique_leaf_addr, lock_cas_offset), compare, swap, cas_buffer, lock_mask, cxt);*/
-    return dsm->cas_mask_sync(GADD(unique_leaf_addr, lock_cas_offset), 0UL, ~0UL, cas_buffer, lock_mask, cxt);
+  return dsm->cas_sync(GADD(unique_leaf_addr, lock_cas_offset), compare, swap, cas_buffer, lock_mask, cxt);
+//    return dsm->cas_mask_sync(GADD(unique_leaf_addr, lock_cas_offset), 0UL, ~0UL, cas_buffer, lock_mask, cxt);
 #else
     GlobalAddress lock_addr;
     uint64_t mask;
