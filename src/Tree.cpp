@@ -482,7 +482,7 @@ void Tree::in_place_update_leaf(const Key &k, Value &v, const GlobalAddress &lea
   swap=compare=(uint64_t)*(buffer);
   compare |= 0xFF;
   swap &= ~0xFF;
-  return dsm->cas_mask_sync(GADD(unique_leaf_addr, lock_cas_offset), compare, swap, cas_buffer, cxt);
+  return dsm->cas_sync(GADD(unique_leaf_addr, lock_cas_offset), compare, swap, cas_buffer, cxt);
 
 //  return  dsm->cas_mask_sync(GADD(unique_leaf_addr, lock_cas_offset), ~0UL, 0UL, cas_buffer, lock_mask, cxt);
 #else
