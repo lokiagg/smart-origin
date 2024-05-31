@@ -450,6 +450,7 @@ void Tree::in_place_update_leaf(const Key &k, Value &v, const GlobalAddress &lea
   compare &= ~0xFF;
   swap |= 0xFF; 
   return dsm->cas_sync(GADD(unique_leaf_addr, lock_cas_offset), compare, swap, cas_buffer, cxt);
+
 //    return dsm->cas_mask_sync(GADD(unique_leaf_addr, lock_cas_offset), 0UL, ~0UL, cas_buffer, lock_mask, cxt);
 #else
     GlobalAddress lock_addr;
@@ -474,14 +475,15 @@ void Tree::in_place_update_leaf(const Key &k, Value &v, const GlobalAddress &lea
   auto unlock = [=](const GlobalAddress &unique_leaf_addr){
 #ifdef TREE_ENABLE_EMBEDDING_LOCK
 //增加mask功能 
-/*  char* leaf_buffer;
-  dsm->read_sync(leaf_buffer,leaf_addr,sizeof(leaf),cxt);
-  uint64_t swap=compare=*((uint64_t*)(leaf_buffer + sizeof(leaf) - 8));
+  char* buffer;
+  buffer=(char*) malloc(8);
+  dsm->read_sync(buffer,GADD(unique_leaf_addr, lock_cas_offset),8,cxt);
+  uint64_t swap=compare=(uint64_t)*(buffer);
   compare |= 0xFF;
-  swap &= ~0xFFULL;
-  return dsm->cas_mask_sync(GADD(unique_leaf_addr, lock_cas_offset), compare, swap, cas_buffer, lock_mask, cxt);*/
+  swap &= ~0xFF;
+  return dsm->cas_mask_sync(GADD(unique_leaf_addr, lock_cas_offset), compare, swap, cas_buffer, cxt);
 
-    dsm->cas_mask_sync(GADD(unique_leaf_addr, lock_cas_offset), ~0UL, 0UL, cas_buffer, lock_mask, cxt);
+//  return  dsm->cas_mask_sync(GADD(unique_leaf_addr, lock_cas_offset), ~0UL, 0UL, cas_buffer, lock_mask, cxt);
 #else
     GlobalAddress lock_addr;
     uint64_t mask;
@@ -497,7 +499,7 @@ void Tree::in_place_update_leaf(const Key &k, Value &v, const GlobalAddress &lea
   return dsm->cas_dm_mask_sync(lock_addr, compare, swap, cas_buffer, mask, cxt);
    */
 
-    dsm->cas_dm_mask_sync(lock_addr, ~0UL, 0UL, cas_buffer, mask, cxt);
+  return  dsm->cas_dm_mask_sync(lock_addr, ~0UL, 0UL, cas_buffer, mask, cxt);
 #endif
   };
 
