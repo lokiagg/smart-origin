@@ -445,7 +445,8 @@ void Tree::in_place_update_leaf(const Key &k, Value &v, const GlobalAddress &lea
   char* buffer;
   buffer=(char*)malloc(8);
   dsm->read_sync(buffer,GADD(unique_leaf_addr, lock_cas_offset),8,cxt);
-  uint64_t swap=compare=(uint64_t)*(buffer);
+  uint64_t swap,compare;
+  swap=compare=(uint64_t)*(buffer);
   compare &= ~0xFF;
   swap |= 0xFF; 
   return dsm->cas_sync(GADD(unique_leaf_addr, lock_cas_offset), compare, swap, cas_buffer, lock_mask, cxt);
