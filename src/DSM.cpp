@@ -119,7 +119,7 @@ void DSM::initRDMAConnection() {
         new ThreadConnection(i, (void *)cache.data, cache.size * define::GB,
                              conf.machineNR, remoteInfo);
   }
-
+  printf("done! \n");
   for (int i = 0; i < NR_DIRECTORY; ++i) {
     dirCon[i] =
         new DirectoryConnection(i, (void *)baseAddr, conf.dsmSize * define::GB,
