@@ -118,6 +118,7 @@ void DSM::initRDMAConnection() {
     thCon[i] =
         new ThreadConnection(i, (void *)cache.data, cache.size * define::GB,
                              conf.machineNR, remoteInfo);
+      printf("thread %d connected\n",i);
   }
   printf("done! \n");
   for (int i = 0; i < NR_DIRECTORY; ++i) {
