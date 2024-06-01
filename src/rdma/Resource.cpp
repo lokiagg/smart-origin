@@ -190,29 +190,20 @@ Debug::notifyError("Memcpy to device memory failed");
   free(buffer);
   return mr;
 }
-
+/*
 bool createQueuePair(ibv_qp **qp, ibv_qp_type mode, ibv_cq *send_cq,
                      ibv_cq *recv_cq, RdmaContext *context,
                      uint32_t qpsMaxDepth, uint32_t maxInlineData) {
 
-//修改 struct ibv_exp_qp_init_attr attr;
-  struct ibv_qp_init_attr_ex attr_ex;
+  struct ibv_exp_qp_init_attr attr;
+
   memset(&attr_ex, 0, sizeof(attr_ex));
-/*修改
   attr.qp_type = mode;
   attr.sq_sig_all = 0;
   attr.send_cq = send_cq;
   attr.recv_cq = recv_cq;
   attr.pd = context->pd;
-*/
 
-  attr_ex.qp_type = mode;
-  attr_ex.sq_sig_all = 0;
-  attr_ex.send_cq = send_cq;
-  attr_ex.recv_cq = recv_cq;
-  attr_ex.pd = context->pd;
- 
-/*
   if (mode == IBV_QPT_RC) {
     attr.comp_mask = IBV_EXP_QP_INIT_ATTR_CREATE_FLAGS |
                      IBV_EXP_QP_INIT_ATTR_PD | IBV_EXP_QP_INIT_ATTR_ATOMICS_ARG;
@@ -220,23 +211,13 @@ bool createQueuePair(ibv_qp **qp, ibv_qp_type mode, ibv_cq *send_cq,
   } else {
     attr.comp_mask = IBV_EXP_QP_INIT_ATTR_PD;
   }
-*/
-  if (mode == IBV_QPT_RC) {
-  attr_ex.comp_mask |= IBV_QP_INIT_ATTR_PD;
 
-  }
 
-/*  attr.cap.max_send_wr = qpsMaxDepth;
+  attr.cap.max_send_wr = qpsMaxDepth;
   attr.cap.max_recv_wr = qpsMaxDepth;
   attr.cap.max_send_sge = 1;
   attr.cap.max_recv_sge = 1;
   attr.cap.max_inline_data = maxInlineData;
-*/
-  attr_ex.cap.max_send_wr = qpsMaxDepth;
-  attr_ex.cap.max_recv_wr = qpsMaxDepth;
-  attr_ex.cap.max_send_sge = 1;
-  attr_ex.cap.max_recv_sge = 1;
-  attr_ex.cap.max_inline_data = maxInlineData; 
 
   *qp = ibv_create_qp_ex(context->ctx, &attr_ex);
   if (!(*qp)) {
@@ -248,6 +229,32 @@ bool createQueuePair(ibv_qp **qp, ibv_qp_type mode, ibv_cq *send_cq,
 
   return true;
 
+}*/
+
+bool createQueuePair(ibv_qp **qp, ibv_qp_type mode, ibv_cq *send_cq,
+ibv_cq *recv_cq, RdmaContext *context,
+uint32_t qpsMaxDepth, uint32_t maxInlineData) {
+
+struct ibv_qp_init_attr attr;
+memset(&attr, 0, sizeof(attr));
+attr.qp_type = mode;
+attr.send_cq = send_cq;
+attr.recv_cq = recv_cq;
+attr.cap.max_send_wr = qpsMaxDepth;
+attr.cap.max_recv_wr = qpsMaxDepth;
+attr.cap.max_send_sge = 1;
+attr.cap.max_recv_sge = 1;
+attr.cap.max_inline_data = maxInlineData;
+
+*qp = ibv_create_qp(context->pd, &attr);
+if (!(*qp)) {
+Debug::notifyError("Failed to create QP");
+return false;
+}
+
+// Debug::notifyInfo("Create Queue Pair with Num = %d", (*qp)->qp_num);
+
+return true;
 }
 
 bool createQueuePair(ibv_qp **qp, ibv_qp_type mode, ibv_cq *cq,
