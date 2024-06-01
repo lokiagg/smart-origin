@@ -15,8 +15,7 @@ void bindCore(uint16_t core) {
     int rc = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
     if (rc != 0) {
         Debug::notifyError("can't bind core!");
-        strerror(rc);
-
+        printf("rc %d\n",rc);
     }
 }
 
