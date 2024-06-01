@@ -394,6 +394,7 @@ int main(int argc, char *argv[]) {
   config.machineNR = kNodeCount;
   config.threadNR = kThreadCount;
   dsm = DSM::getInstance(config);
+  printf("xiancheng %d \n",kThreadCount);
   bindCore(kThreadCount * 2 + 1);
   if (rm_write_conflict) {
     dsm->loadKeySpace(ycsb_load_path, kIsStr);
