@@ -84,7 +84,7 @@ InternalEntry Tree::get_root_ptr(CoroContext *cxt, int coro_id) {
 
 void Tree::insert(const Key &k, Value v, CoroContext *cxt, int coro_id, bool is_update, bool is_load) {
   assert(dsm->is_register());
-  printf("insert start\n");
+  printf("thread %" PRIu64"insert start\n",dsm->getMyThreadID());
   // handover
   bool write_handover = false;
   std::pair<bool, bool> lock_res = std::make_pair(false, false);
