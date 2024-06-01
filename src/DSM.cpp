@@ -113,8 +113,9 @@ void DSM::initRDMAConnection() {
   Debug::notifyInfo("Machine NR: %d", conf.machineNR);
 
   remoteInfo = new RemoteConnection[conf.machineNR];
-
+  printf("start!\n");
   for (int i = 0; i < MAX_APP_THREAD; ++i) {
+          printf("thread %d start\n",i);
     thCon[i] =
         new ThreadConnection(i, (void *)cache.data, cache.size * define::GB,
                              conf.machineNR, remoteInfo);
