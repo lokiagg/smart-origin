@@ -12,11 +12,9 @@ void bindCore(uint16_t core) {
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
     CPU_SET(core, &cpuset);
-    printf("core num%u,cpu num %d\n",core,sizeof(cpu_set_t));
     int rc = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
     if (rc != 0) {
         Debug::notifyError("can't bind core!");
-        printf("rc %d\n",rc);
     }
 }
 
