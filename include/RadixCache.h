@@ -16,7 +16,7 @@
 
 
 struct CacheNodeValue {
-  volatile CacheEntry* cache_entry;
+  volatile CacheEntry* cache_entry;   //就一个entry  //要么internal  要么 buffer
   volatile void * next;
 
   CacheNodeValue() :  cache_entry(nullptr), next(nullptr) {}

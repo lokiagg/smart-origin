@@ -84,7 +84,6 @@ InternalEntry Tree::get_root_ptr(CoroContext *cxt, int coro_id) {
 
 void Tree::insert(const Key &k, Value v, CoroContext *cxt, int coro_id, bool is_update, bool is_load) {
   assert(dsm->is_register());
-  printf("thread %u insert start\n",dsm->getMyThreadID());
   // handover
   bool write_handover = false;
   std::pair<bool, bool> lock_res = std::make_pair(false, false);
@@ -125,6 +124,7 @@ void Tree::insert(const Key &k, Value v, CoroContext *cxt, int coro_id, bool is_
 
   // search local cache
 #ifdef TREE_ENABLE_CACHE
+/*
   from_cache = index_cache->search_from_cache(k, entry_ptr_ptr, entry_ptr, entry_idx);
   if (from_cache) { // cache hit
     assert(entry_idx >= 0);
@@ -138,12 +138,12 @@ void Tree::insert(const Key &k, Value v, CoroContext *cxt, int coro_id, bool is_
     p = get_root_ptr(cxt, coro_id);
     depth = 0;
   }
-#else
+#else*/
   p_ptr = root_ptr_ptr;
   p = get_root_ptr(cxt, coro_id);
   node_ptr = root_ptr_ptr;
   depth = 0;
-#endif
+//#endif
   depth ++;  // partial key in entry is matched
   cache_depth = depth;
 
@@ -237,7 +237,7 @@ next:
       goto insert_finish;
     }
 
-    // 2.3 New key, we must merge the two leaves into a node (leaf split)
+    // 2.3 New key, we must merge the two leaves into a node (leaf split)   
     int partial_len = longest_common_prefix(_k, k, depth);
     uint8_t diff_partial = get_partial(_k, depth + partial_len);
     auto cas_buffer = (dsm->get_rbuf(coro_id)).get_cas_buffer();
