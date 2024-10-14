@@ -123,7 +123,7 @@ void Tree::insert(const Key &k, Value v, CoroContext *cxt, int coro_id, bool is_
   }
 
   // search local cache
-#ifdef TREE_ENABLE_CACHE
+// #ifdef TREE_ENABLE_CACHE
 /*
   from_cache = index_cache->search_from_cache(k, entry_ptr_ptr, entry_ptr, entry_idx);
   if (from_cache) { // cache hit
